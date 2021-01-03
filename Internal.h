@@ -10,6 +10,12 @@
 #include <lang/types.h>
 #include <QuickFile.h>
 
+typedef enum Keyword {
+    KEYWORD_DEFINE,
+    KEYWORD_LAMBDA,
+    NUM_KEYWORDS
+} Keyword;
+
 typedef struct TokenList {
     struct Token *head;
     int size;
@@ -26,6 +32,7 @@ struct Token {
         long fixedPointNumber;
         char character;
         bool booleanValue;
+        Keyword keyword;
     } data;
 };
 

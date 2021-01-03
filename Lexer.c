@@ -7,7 +7,8 @@
 
 static const uint8 MAX_TOKEN_LENGTH = 255;
 
-static const char delimeters[] = {" ()[]"};
+static const char delimeters[] = " ()[]";
+static const char VALID_SPECIAL_IDENTIFIER_CHARACTERS[] = "!$%&*+-./:<=>?@^_~";
 static const int numDelimeters = 2;
 
 static bool isNumeral(const char c) {
@@ -41,8 +42,19 @@ static bool isDelimeter(const char c) {
     return false;
 }
 
+static bool isValidSpecialIdentifierCharacter(const char c) {
+    int i;
+    for (i = 0; i < strlen(VALID_SPECIAL_IDENTIFIER_CHARACTERS); i++) {
+        if (c == VALID_SPECIAL_IDENTIFIER_CHARACTERS[i]) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static bool isValidIdentifierCharacter(const char c) {
-    return !isDelimeter(c);
+    return isAlphanumeral(c) || isValidSpecialIdentifierCharacter(c);
 }
 
 static void consumeWhitespace(QfFile *file) {
@@ -61,6 +73,34 @@ static void ensureMatch(const char actual, const char expected) {
         printf("Lexer - failed to ensure match");
         exit(-1);
     }
+}
+
+static void readQuotedIdentifier(TokenList *tokens, QfFile *file) {
+    char c = qf_ReadCharacter(file);
+    char string[MAX_TOKEN_LENGTH + 1];
+    int i = 1;
+    string[0] = '|';
+
+    while (c != '|') {
+        if (c == QF_EOF) {
+            printf("Lexer error - expected | to complete identifier.\n");
+            exit(-1);
+        }
+
+        string[i] = c;
+        c = qf_ReadCharacter(file);
+        i++;
+
+        if (i >= MAX_TOKEN_LENGTH - 1) {
+            printf("Lexer error - identifier length is greater than max token length, %s\n", string);
+            exit(-1);
+        }
+    }
+
+    string[i] = '|';
+    string[i + 1] = '\0';
+
+    TokenList_AddNewToken(tokens, TOKEN_TYPE_IDENTIFIER, string);
 }
 
 static void readString(TokenList *tokens, QfFile *file) {
@@ -178,10 +218,11 @@ static void readNumber(TokenList *tokens, QfFile *file) {
         string[i] = '\0';
         Token *newToken = TokenList_AddNewToken(tokens, TOKEN_TYPE_FIXED_POINT_NUMBER, string);
         newToken->data.fixedPointNumber = (long) (sign * value);
+        qf_Rewind(file, 1);
     }
 }
 
-static Token *readIdentifier(QfFile *file) {
+static void readIdentifier(TokenList *tokens, QfFile *file) {
     char word[MAX_TOKEN_LENGTH];
     uint16 pos = 0;
     
@@ -196,11 +237,11 @@ static Token *readIdentifier(QfFile *file) {
             printf ("Lexer error - token larger than max supported size (%d)\n", MAX_TOKEN_LENGTH - 1);
             exit(-1);
         }
-    } while (isValidIdentifierCharacter(c));
+    } while (isValidIdentifierCharacter(c) && c != EOF);
     
     word[pos] = '\0';
 
-    return word;
+    Token *token = TokenList_AddNewToken(tokens, TOKEN_TYPE_IDENTIFIER, word);
 }
 
 static void ensureReadMatchesDelimetedString(QfFile *file, const char *expected) {
@@ -252,7 +293,6 @@ TokenList *Lexer_AnalyzeAndCreateTokenList(const char *filePath) {
 
                 if ( isDelimeter(qf_PeekCharacter(file)) ) {
                     qf_ReadCharacter(file);
-                    printf("made it!\n");
                     char string[4] = "#\\";
                     string[2] = c;
                     Token *newToken = TokenList_AddNewToken(tokens, TOKEN_TYPE_CHARACTER, string);
@@ -260,7 +300,6 @@ TokenList *Lexer_AnalyzeAndCreateTokenList(const char *filePath) {
                 } else {
                     printf("special character\n");
                     qf_Rewind(file, 1);
-                    printf("peek %c\n", qf_PeekCharacter(file));
                     printf("peek %c\n", qf_PeekCharacter(file));
 
                     switch(qf_PeekCharacter(file)) {
@@ -293,15 +332,24 @@ TokenList *Lexer_AnalyzeAndCreateTokenList(const char *filePath) {
         } else if (c == '"') {
             readString(tokens, file);
         } else if (c == '(') {
-            if (qf_ReadCharacter(file) == ')') {
+            if (qf_PeekCharacter(file) == ')') {
+                qf_ReadCharacter(file);
                 TokenList_AddNewToken(tokens, TOKEN_TYPE_EMPTY_LIST, "()");
             } else {
-                printf("Lexer error - lists not yet supported\n");
-                exit(-1);
+                TokenList_AddNewToken(tokens, TOKEN_TYPE_LEFT_PARENTHESIS, "(");
             }
+        } else if (c == ')') {
+            TokenList_AddNewToken(tokens, TOKEN_TYPE_RIGHT_PARENTHESIS, ")");
         } else {
-            printf("Unsupported synax.\n");
-            exit(-1);
+            if (isNumeral(c)) {
+                printf("Lexer error - identifiers cannot start with numerals.");
+                exit(-1);
+            } else if (c == '|') {
+                readQuotedIdentifier(tokens, file);
+            } else {
+                qf_Rewind(file, 1);
+                readIdentifier(tokens, file);
+            }
         }
 
         consumeWhitespace(file);
