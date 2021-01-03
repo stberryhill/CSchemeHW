@@ -50,7 +50,7 @@ static void consumeWhitespace(QfFile *file) {
     do {
         c = qf_ReadCharacter(file);
         printf("consuming %c\n", c);
-    } while (c == ' ' | c == '\t' | c == '\n');
+    } while (c == ' ' || c == '\t' || c == '\n');
 
     qf_Rewind(file, 1);
     printf("rewind 1\n");

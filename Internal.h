@@ -10,11 +10,6 @@
 #include <lang/types.h>
 #include <QuickFile.h>
 
-struct Scheme {
-    Token *tokens;
-    char *name;
-};
-
 typedef struct TokenList {
     struct Token *head;
     int size;

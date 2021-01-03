@@ -3,7 +3,7 @@
 
 #include <lang/types.h>
 
-typedef enum TokenTypes {
+typedef enum TokenType {
     TOKEN_TYPE_IDENTIFIER,
     TOKEN_TYPE_BOOLEAN,
     TOKEN_TYPE_CHARACTER,
